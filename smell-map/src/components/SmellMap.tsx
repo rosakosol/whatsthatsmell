@@ -58,6 +58,35 @@ function incrementDailyUsage() {
 
 export default function SmellMap() {
   const [reports, setReports] = useState<SmellReport[]>([]);
+  const [center, setCenter] = useState<[number, number] | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+
+  // On load, try to center on user's live location
+  useEffect(() => {
+    if (!("geolocation" in navigator)) {
+      setLocationError("Location is not available in this browser.");
+      // Fallback: Melbourne CBD
+      setCenter([-37.8136, 144.9631]);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCenter([pos.coords.latitude, pos.coords.longitude]);
+      },
+      (err) => {
+        console.error("Geolocation error", err);
+        setLocationError("Couldn't get your location. Showing default view.");
+        // Fallback: Melbourne CBD
+        setCenter([-37.8136, 144.9631]);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000,
+      }
+    );
+  }, []);
 
   useEffect(() => {
     const q = query(
@@ -117,47 +146,64 @@ export default function SmellMap() {
     }
   }
 
+  if (!center) {
+    return (
+      <div style={{ height: "80vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <p>Getting your location...</p>
+      </div>
+    );
+  }
+
   return (
-    <MapContainer
-      center={[-37.8136, 144.9631]}
-      zoom={13}
-      style={{ height: "80vh", width: "100%" }}
-    >
-      <TileLayer
-        attribution="&copy; OpenStreetMap contributors"
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
+    <>
+      {locationError && (
+        <p style={{ color: "#cc0000", marginBottom: "0.5rem" }}>
+          {locationError}
+        </p>
+      )}
 
-      <MapClickHandler onClick={handleMapClick} />
+      <MapContainer
+        key={center.join(",")}
+        center={center}
+        zoom={15}
+        style={{ height: "80vh", width: "100%" }}
+      >
+        <TileLayer
+          attribution="&copy; OpenStreetMap contributors"
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
 
-      {reports.map((report) => (
-        <Marker
-          key={report.id}
-          position={[report.lat, report.lng]}
-          icon={defaultIcon as any}
-        >
-          <Popup>
-            <div>
-              <strong>Smell intensity:</strong> {report.intensity}/5
-              {report.description && (
-                <>
-                  <br />
-                  <strong>Description:</strong> {report.description}
-                </>
-              )}
-              {report.createdAt && (
-                <>
-                  <br />
-                  <small>
-                    Reported at:{" "}
-                    {report.createdAt.toLocaleString()}
-                  </small>
-                </>
-              )}
-            </div>
-          </Popup>
-        </Marker>
-      ))}
-    </MapContainer>
+        <MapClickHandler onClick={handleMapClick} />
+
+        {reports.map((report) => (
+          <Marker
+            key={report.id}
+            position={[report.lat, report.lng]}
+            icon={defaultIcon as any}
+          >
+            <Popup>
+              <div>
+                <strong>Smell intensity:</strong> {report.intensity}/5
+                {report.description && (
+                  <>
+                    <br />
+                    <strong>Description:</strong> {report.description}
+                  </>
+                )}
+                {report.createdAt && (
+                  <>
+                    <br />
+                    <small>
+                      Reported at:{" "}
+                      {report.createdAt.toLocaleString()}
+                    </small>
+                  </>
+                )}
+              </div>
+            </Popup>
+          </Marker>
+        ))}
+      </MapContainer>
+    </>
   );
 }
