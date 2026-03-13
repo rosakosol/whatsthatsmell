@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useEffect, useState } from "react";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Circle } from "react-leaflet";
 import L from "leaflet";
 import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
@@ -23,6 +23,13 @@ const defaultIcon = L.icon({
   iconAnchor: [12, 41],
   popupAnchor: [1, -34],
   shadowSize: [41, 41],
+});
+
+const userIcon = L.divIcon({
+  className: "user-location-icon",
+  html: '<div style="width:16px;height:16px;border-radius:50%;background:#0066ff;border:2px solid #ffffff;box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>',
+  iconSize: [16, 16],
+  iconAnchor: [8, 8],
 });
 
 const DAILY_LIMIT = 50;
@@ -60,6 +67,7 @@ export default function SmellMap() {
   const [reports, setReports] = useState<SmellReport[]>([]);
   const [center, setCenter] = useState<[number, number] | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [userPosition, setUserPosition] = useState<[number, number] | null>(null);
 
   // On load, try to center on user's live location
   useEffect(() => {
@@ -70,9 +78,12 @@ export default function SmellMap() {
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
+    const watchId = navigator.geolocation.watchPosition(
       (pos) => {
-        setCenter([pos.coords.latitude, pos.coords.longitude]);
+        const nextPos: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+        setUserPosition(nextPos);
+        // If we don't have a center yet, use the first position to center the map
+        setCenter((current) => current ?? nextPos);
       },
       (err) => {
         console.error("Geolocation error", err);
@@ -86,6 +97,10 @@ export default function SmellMap() {
         maximumAge: 60000,
       }
     );
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+    };
   }, []);
 
   useEffect(() => {
@@ -174,6 +189,23 @@ export default function SmellMap() {
         />
 
         <MapClickHandler onClick={handleMapClick} />
+
+        {userPosition && (
+          <>
+            <Circle
+              center={userPosition}
+              radius={1000} // 1km in meters
+              pathOptions={{
+                color: "#0066ff",
+                fillColor: "#3388ff",
+                fillOpacity: 0.2,
+              }}
+            />
+            <Marker position={userPosition} icon={userIcon}>
+              <Popup>You are here</Popup>
+            </Marker>
+          </>
+        )}
 
         {reports.map((report) => (
           <Marker
