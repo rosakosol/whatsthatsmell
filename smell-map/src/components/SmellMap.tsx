@@ -246,18 +246,30 @@ export default function SmellMap() {
       return;
     }
 
-    let description: string | null = window.prompt("Describe the smell (optional)");
-    while (description !== null && description !== "" && containsOffensiveTerms(description)) {
-      window.alert("You cannot enter offensive terms. Please re-enter your description.");
-      description = window.prompt("Describe the smell (optional)");
+    let description: string | null = window.prompt("Describe the smell (required)");
+    while (description !== null) {
+      const trimmed = (description || "").trim();
+      if (trimmed === "") {
+        window.alert("Description is required to submit a smell report.");
+        description = window.prompt("Describe the smell (required)");
+        continue;
+      }
+      if (containsOffensiveTerms(trimmed)) {
+        window.alert("You cannot enter offensive terms. Please re-enter your description.");
+        description = window.prompt("Describe the smell (required)");
+        continue;
+      }
+      description = trimmed;
+      break;
     }
+    if (description === null) return;
 
     try {
       await addDoc(collection(db, "smellReports"), {
         lat: coords.lat,
         lng: coords.lng,
         intensity,
-        description: description || "",
+        description,
         createdAt: serverTimestamp(),
       });
       incrementDailyUsage();
