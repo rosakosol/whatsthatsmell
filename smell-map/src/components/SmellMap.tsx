@@ -4,6 +4,7 @@ import { MapContainer, TileLayer, Marker, Popup, Circle, CircleMarker } from "re
 import L from "leaflet";
 import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
+import { containsOffensiveTerms } from "../lib/censoredWords";
 import MapClickHandler from "./MapClickHandler";
 
 type SmellReport = {
@@ -245,7 +246,11 @@ export default function SmellMap() {
       return;
     }
 
-    const description = window.prompt("Optional: describe the smell");
+    let description: string | null = window.prompt("Describe the smell (optional)");
+    while (description !== null && description !== "" && containsOffensiveTerms(description)) {
+      window.alert("You cannot enter offensive terms. Please re-enter your description.");
+      description = window.prompt("Describe the smell (optional)");
+    }
 
     try {
       await addDoc(collection(db, "smellReports"), {
