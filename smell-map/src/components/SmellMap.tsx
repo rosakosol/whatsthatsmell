@@ -4,8 +4,22 @@ import { MapContainer, TileLayer, Marker, Popup, Circle, CircleMarker } from "re
 import L from "leaflet";
 import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
-import { containsOffensiveTerms } from "../lib/censoredWords";
+import { Filter } from "bad-words";
 import MapClickHandler from "./MapClickHandler";
+
+const filter = new Filter();
+
+filter.removeWords(
+  "shit",
+  "bullshit",
+  "shithead",
+  "shitface",
+  "fuck",
+  "fucker",
+  "fucking",
+  "motherfucker"
+);
+
 
 type SmellReport = {
   id: string;
@@ -254,7 +268,7 @@ export default function SmellMap() {
         description = window.prompt("Describe the smell (required)");
         continue;
       }
-      if (containsOffensiveTerms(trimmed)) {
+      if (filter.isProfane(trimmed)) {
         window.alert("You cannot enter offensive terms. Please re-enter your description.");
         description = window.prompt("Describe the smell (required)");
         continue;
@@ -265,6 +279,7 @@ export default function SmellMap() {
     if (description === null) return;
 
     try {
+      console.log("DB instance:", db);
       await addDoc(collection(db, "smellReports"), {
         lat: coords.lat,
         lng: coords.lng,
