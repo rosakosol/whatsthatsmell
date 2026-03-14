@@ -55,6 +55,61 @@ const userIcon = L.divIcon({
 
 const ACTIVE_MS = 60 * 60 * 1000;       // 1 hour – show as full marker
 const HISTORY_MS = 24 * 60 * 60 * 1000; // 24 hours – show in history / red dot
+const HOTSPOT_LOOKUP_RADIUS_M = 1000; // reports within this form a hotspot cluster
+const HOTSPOT_MIN_COUNT = 5;          // min reports in cluster to show mist
+const MIN_CIRCLE_RADIUS_M = 40;      // minimum circle size so it's visible
+
+function distanceMeters(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number
+): number {
+  const R = 6371000; // Earth radius in metres
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+/**
+ * Green-mist circles derived from pin positions: each circle's center is the
+ * centroid of a cluster (≥5 reports within 1km), and its radius is the distance
+ * from that centroid to the farthest pin (so the circle wraps the pins).
+ */
+function getHotspotCircles(
+  reports: SmellReport[]
+): { center: [number, number]; radius: number }[] {
+  const seen = new Set<string>();
+  const result: { center: [number, number]; radius: number }[] = [];
+
+  for (const r of reports) {
+    const nearby = reports.filter(
+      (other) => distanceMeters(r.lat, r.lng, other.lat, other.lng) <= HOTSPOT_LOOKUP_RADIUS_M
+    );
+    if (nearby.length < HOTSPOT_MIN_COUNT) continue;
+
+    const centerLat = nearby.reduce((s, n) => s + n.lat, 0) / nearby.length;
+    const centerLng = nearby.reduce((s, n) => s + n.lng, 0) / nearby.length;
+    const radius = Math.max(
+      MIN_CIRCLE_RADIUS_M,
+      ...nearby.map((n) => distanceMeters(centerLat, centerLng, n.lat, n.lng))
+    );
+
+    const key = `${centerLat.toFixed(3)},${centerLng.toFixed(3)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push({ center: [centerLat, centerLng], radius });
+  }
+
+  return result;
+}
 
 function getLocationKey(lat: number, lng: number) {
   return `${lat.toFixed(4)},${lng.toFixed(4)}`;
@@ -181,7 +236,7 @@ export default function SmellMap() {
       return;
     }
 
-    const intensityStr = window.prompt("How smelly is it? (1–5)");
+    const intensityStr = window.prompt("How smelly is it? (1-5)");
     if (!intensityStr) return;
 
     const intensity = Number(intensityStr);
@@ -235,6 +290,21 @@ export default function SmellMap() {
         />
 
         <MapClickHandler onClick={handleMapClick} />
+
+        {getHotspotCircles(getReportsInWindow(reports, HISTORY_MS)).map(({ center, radius }, i) => (
+          <Circle
+            key={`hotspot-${i}`}
+            center={center}
+            radius={radius}
+            pathOptions={{
+              color: "transparent",
+              fillColor: "#228b22",
+              fillOpacity: 0.35,
+              weight: 0,
+              className: "hotspot-mist",
+            }}
+          />
+        ))}
 
         {userPosition && (
           <>

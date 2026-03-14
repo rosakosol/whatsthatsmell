@@ -41,3 +41,8 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Green hotspot mist: single circle with blurred edge */
+.hotspot-mist {
+  filter: blur(18px);
+}
