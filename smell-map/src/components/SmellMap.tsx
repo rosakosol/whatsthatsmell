@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useEffect, useState } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Circle } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Circle, CircleMarker } from "react-leaflet";
 import L from "leaflet";
 import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
@@ -52,6 +52,31 @@ const userIcon = L.divIcon({
   iconSize: [16, 16],
   iconAnchor: [8, 8],
 });
+
+const ACTIVE_MS = 60 * 60 * 1000;       // 1 hour – show as full marker
+const HISTORY_MS = 24 * 60 * 60 * 1000; // 24 hours – show in history / red dot
+
+function getLocationKey(lat: number, lng: number) {
+  return `${lat.toFixed(4)},${lng.toFixed(4)}`;
+}
+
+function getReportsInWindow(reports: SmellReport[], windowMs: number) {
+  const cutoff = Date.now() - windowMs;
+  return reports.filter((r) => r.createdAt && r.createdAt.getTime() >= cutoff);
+}
+
+function groupReportsByLocation(reports: SmellReport[]): Map<string, SmellReport[]> {
+  const map = new Map<string, SmellReport[]>();
+  for (const r of reports) {
+    const key = getLocationKey(r.lat, r.lng);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(r);
+  }
+  for (const arr of map.values()) {
+    arr.sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
+  }
+  return map;
+}
 
 const DAILY_LIMIT = 50;
 const STORAGE_KEY = "smell-report-daily-usage";
@@ -228,34 +253,111 @@ export default function SmellMap() {
           </>
         )}
 
-        {reports.map((report) => (
-          <Marker
-            key={report.id}
-            position={[report.lat, report.lng]}
-            icon={defaultIcon as any}
-          >
-            <Popup>
-              <div>
-                <strong>Smell intensity:</strong> {report.intensity}/5
-                {report.description && (
-                  <>
-                    <br />
-                    <strong>Description:</strong> {report.description}
-                  </>
-                )}
-                {report.createdAt && (
-                  <>
-                    <br />
-                    <small>
-                      Reported at:{" "}
-                      {formatDateWithOrdinal(report.createdAt)}
-                    </small>
-                  </>
-                )}
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+        {(() => {
+          const inLast24h = getReportsInWindow(reports, HISTORY_MS);
+          const activeReports = getReportsInWindow(reports, ACTIVE_MS);
+          const byLocation = groupReportsByLocation(inLast24h);
+
+          const elements: React.ReactNode[] = [];
+
+          byLocation.forEach((groupReports, locationKey) => {
+            const latest = groupReports[0];
+            const position: [number, number] = [latest.lat, latest.lng];
+            const hasActive = groupReports.some((r) =>
+              r.createdAt && r.createdAt.getTime() >= Date.now() - ACTIVE_MS
+            );
+
+            const historyList = (
+              <ul style={{ margin: "0.5rem 0 0 0", paddingLeft: "1.2rem" }}>
+                {groupReports.map((r) => (
+                  <li key={r.id} style={{ marginBottom: "0.25rem" }}>
+                    <strong>{r.intensity}/5</strong>
+                    {r.description && ` – ${r.description}`}
+                    {r.createdAt && (
+                      <small style={{ display: "block" }}>
+                        {formatDateWithOrdinal(r.createdAt)}
+                      </small>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            );
+
+            if (hasActive) {
+              elements.push(
+                <Marker
+                  key={`active-${locationKey}`}
+                  position={position}
+                  icon={defaultIcon as any}
+                >
+                  <Popup>
+                    <div>
+                      <strong>Smell intensity:</strong> {latest.intensity}/5
+                      {latest.description && (
+                        <>
+                          <br />
+                          <strong>Description:</strong> {latest.description}
+                        </>
+                      )}
+                      {latest.createdAt && (
+                        <>
+                          <br />
+                          <small>
+                            Reported at: {formatDateWithOrdinal(latest.createdAt)}
+                          </small>
+                        </>
+                      )}
+                      {groupReports.length > 1 && (
+                        <>
+                          <br />
+                          <strong style={{ marginTop: "0.5rem", display: "block" }}>
+                            Past reports here (24h):
+                          </strong>
+                          <ul style={{ margin: "0.5rem 0 0 0", paddingLeft: "1.2rem" }}>
+                            {groupReports.slice(1).map((r) => (
+                              <li key={r.id} style={{ marginBottom: "0.25rem" }}>
+                                <strong>{r.intensity}/5</strong>
+                                {r.description && ` – ${r.description}`}
+                                {r.createdAt && (
+                                  <small style={{ display: "block" }}>
+                                    {formatDateWithOrdinal(r.createdAt)}
+                                  </small>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+                    </div>
+                  </Popup>
+                </Marker>
+              );
+            } else {
+              elements.push(
+                <CircleMarker
+                  key={`history-${locationKey}`}
+                  center={position}
+                  radius={6}
+                  pathOptions={{
+                    color: "#c00",
+                    fillColor: "#e00",
+                    fillOpacity: 0.9,
+                    weight: 2,
+                  }}
+                >
+                  <Popup>
+                    <div>
+                      <strong>Smell report history (24h)</strong>
+                      {historyList}
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              );
+            }
+          });
+
+          return elements;
+        })()}
       </MapContainer>
     </>
   );
