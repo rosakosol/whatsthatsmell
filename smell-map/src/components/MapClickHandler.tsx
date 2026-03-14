@@ -2,7 +2,7 @@ import { useMapEvents } from "react-leaflet";
 
 export default function MapClickHandler({ onClick }: any) {
   useMapEvents({
-    click(e) {
+    click(e: any) {
       onClick(e.latlng);
     }
   });

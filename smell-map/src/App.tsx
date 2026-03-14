@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import './App.css'
 import SmellMap from './components/SmellMap'
 import "leaflet/dist/leaflet.css"

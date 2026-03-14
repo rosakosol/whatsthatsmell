@@ -25,6 +25,27 @@ const defaultIcon = L.icon({
   shadowSize: [41, 41],
 });
 
+function formatDateWithOrdinal(date: Date) {
+  const day = date.getDate();
+  const j = day % 10;
+  const k = day % 100;
+
+  let suffix = "th";
+  if (j === 1 && k !== 11) suffix = "st";
+  else if (j === 2 && k !== 12) suffix = "nd";
+  else if (j === 3 && k !== 13) suffix = "rd";
+
+  const month = date.toLocaleString("en-GB", { month: "long" });
+  const year = date.getFullYear();
+  const time = date.toLocaleTimeString("en-GB", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+  return `${day}${suffix} ${month}, ${year} at ${time}`;
+}
+
 const userIcon = L.divIcon({
   className: "user-location-icon",
   html: '<div style="width:16px;height:16px;border-radius:50%;background:#0066ff;border:2px solid #ffffff;box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>',
@@ -194,7 +215,7 @@ export default function SmellMap() {
           <>
             <Circle
               center={userPosition}
-              radius={1000} // 1km in meters
+              radius={500} // 500 meters radius
               pathOptions={{
                 color: "#0066ff",
                 fillColor: "#3388ff",
@@ -227,7 +248,7 @@ export default function SmellMap() {
                     <br />
                     <small>
                       Reported at:{" "}
-                      {report.createdAt.toLocaleString()}
+                      {formatDateWithOrdinal(report.createdAt)}
                     </small>
                   </>
                 )}
