@@ -60,6 +60,37 @@ const HOTSPOT_LOOKUP_RADIUS_M = 1000; // reports within this form a hotspot clus
 const HOTSPOT_MIN_COUNT = 5;          // min reports in cluster to show mist
 const MIN_CIRCLE_RADIUS_M = 40;      // minimum circle size so it's visible
 
+const DAILY_LIMIT = 50;
+const STORAGE_KEY = "smell-report-daily-usage";
+
+function getTodayKey() {
+  const now = new Date();
+  return now.toISOString().slice(0, 10); // "YYYY-MM-DD"
+}
+
+function getDailyUsage() {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      return { date: getTodayKey(), count: 0 };
+    }
+    const parsed = JSON.parse(raw);
+    if (parsed.date !== getTodayKey()) {
+      return { date: getTodayKey(), count: 0 };
+    }
+    return parsed;
+  } catch {
+    return { date: getTodayKey(), count: 0 };
+  }
+}
+
+function incrementDailyUsage() {
+  const usage = getDailyUsage();
+  const next = { date: usage.date, count: usage.count + 1 };
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  return next;
+}
+
 function distanceMeters(
   lat1: number,
   lng1: number,
@@ -132,37 +163,6 @@ function groupReportsByLocation(reports: SmellReport[]): Map<string, SmellReport
     arr.sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
   }
   return map;
-}
-
-const DAILY_LIMIT = 50;
-const STORAGE_KEY = "smell-report-daily-usage";
-
-function getTodayKey() {
-  const now = new Date();
-  return now.toISOString().slice(0, 10); // "YYYY-MM-DD"
-}
-
-function getDailyUsage() {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return { date: getTodayKey(), count: 0 };
-    }
-    const parsed = JSON.parse(raw);
-    if (parsed.date !== getTodayKey()) {
-      return { date: getTodayKey(), count: 0 };
-    }
-    return parsed;
-  } catch {
-    return { date: getTodayKey(), count: 0 };
-  }
-}
-
-function incrementDailyUsage() {
-  const usage = getDailyUsage();
-  const next = { date: usage.date, count: usage.count + 1 };
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  return next;
 }
 
 export default function SmellMap() {
