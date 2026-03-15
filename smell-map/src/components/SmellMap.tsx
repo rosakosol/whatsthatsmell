@@ -328,7 +328,7 @@ export default function SmellMap() {
       )}
 
       <MapContainer
-        className="rounded-lg"
+        className="rounded-lg z-0"
         key={center.join(",")}
         center={center}
         zoom={15}

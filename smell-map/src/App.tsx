@@ -12,9 +12,12 @@ function App() {
         <div className="flex items-center justify-end p-2">
           <ModeToggle />
         </div>
-        <div className="flex items-center justify-center pb-4">
-          <img src={GreenMist} className="h-10 w-auto mr-3" />
-          <h1 className="text-4xl font-bold">What's That Smell?</h1>
+        <div className="flex flex-col items-center justify-center pb-4">
+          <div className="flex flex-row">
+            <img src={GreenMist} className="h-10 w-auto mr-3" />
+            <h1 className="text-4xl font-bold">What's That Smell?</h1>
+          </div>
+          <h2>Report and investigate offensive smells nearby.</h2>
         </div>
         <SmellMap />
       </div>
