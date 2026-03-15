@@ -66,3 +66,9 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* Green hotspot mist: single circle with blurred edge */
+.hotspot-mist {
+  filter: blur(18px);
+}
+
