@@ -1,16 +1,14 @@
-import { Circle, useMap } from 'react-leaflet';
+import { Circle } from 'react-leaflet';
 import { useEffect, useRef } from 'react';
 
 interface AnimatedCircleProps {
   center: [number, number];
   radius: number;
-  color?: string;
-  fillColor?: string;
-  minOpacity?: number;
-  maxOpacity?: number;
+  color: string;
+  fillColor: string;
+  minOpacity: number;
+  maxOpacity: number;
   speed?: number; // how fast the fade in/out is
-  color?: string;
-  fillColor?: string;
   fillOpacity?: number;
   blur?: number; // optional blur in pixels
 }
@@ -48,14 +46,17 @@ export const AnimatedCircle = ({
     return () => clearInterval(interval);
   }, [minOpacity, maxOpacity, speed]);
 
+  useEffect(() => {
+    if (!circleRef.current || blur <= 0) return;
+    const el = circleRef.current.getElement();
+    if (el) el.classList.add("blurred-circle");
+  }, [blur]);
+
   return (
     <Circle
       ref={circleRef}
       center={center}
-      radius={radius}
-      pathOptions={{ color, fillColor, fillOpacity: minOpacity }}
-
-      className={blur > 0 ? "blurred-circle" : undefined}
+      pathOptions={{ color, fillColor, fillOpacity: minOpacity, radius:radius }}
     />
   );
 };
