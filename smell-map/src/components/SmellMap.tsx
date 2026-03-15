@@ -328,10 +328,11 @@ export default function SmellMap() {
       )}
 
       <MapContainer
+        className="rounded-lg"
         key={center.join(",")}
         center={center}
         zoom={15}
-        style={{ height: "80vh", width: "100%" }}
+        style={{ height: "80vh", width: "90vw", margin: "auto" }}
       >
         <TileLayer
           attribution="&copy; OpenStreetMap contributors"
