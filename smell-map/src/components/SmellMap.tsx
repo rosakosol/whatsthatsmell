@@ -74,7 +74,7 @@ const HOTSPOT_LOOKUP_RADIUS_M = 1000; // reports within this form a hotspot clus
 const HOTSPOT_MIN_COUNT = 5;          // min reports in cluster to show mist
 const MIN_CIRCLE_RADIUS_M = 40;      // minimum circle size so it's visible
 
-const DAILY_LIMIT = 50;
+const DAILY_LIMIT = 10;
 const STORAGE_KEY = "smell-report-daily-usage";
 
 function getTodayKey() {
