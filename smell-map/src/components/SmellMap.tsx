@@ -6,6 +6,8 @@ import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from 
 import { db } from "../firebase";
 import { Filter } from "bad-words";
 import MapClickHandler from "./MapClickHandler";
+import { motion } from "motion/react"
+import { AnimatedCircle } from "./Circle";
 
 const filter = new Filter();
 
@@ -130,33 +132,48 @@ function distanceMeters(
  * from that centroid to the farthest pin (so the circle wraps the pins).
  */
 function getHotspotCircles(
-  reports: SmellReport[]
+  reports: SmellReport[],
+  windowMs: number = ACTIVE_MS // default to active reports only
 ): { center: [number, number]; radius: number }[] {
+  const now = Date.now();
+
+  // Filter only reports within the active window
+  const activeReports = reports.filter(
+    (r) => r.createdAt && r.createdAt.getTime() >= now - windowMs
+  );
+
   const seen = new Set<string>();
   const result: { center: [number, number]; radius: number }[] = [];
 
-  for (const r of reports) {
-    const nearby = reports.filter(
+  for (const r of activeReports) {
+    // Find nearby active reports
+    const nearby = activeReports.filter(
       (other) => distanceMeters(r.lat, r.lng, other.lat, other.lng) <= HOTSPOT_LOOKUP_RADIUS_M
     );
+
+    // Must meet minimum count to qualify as hotspot
     if (nearby.length < HOTSPOT_MIN_COUNT) continue;
 
+    // Calculate centroid
     const centerLat = nearby.reduce((s, n) => s + n.lat, 0) / nearby.length;
     const centerLng = nearby.reduce((s, n) => s + n.lng, 0) / nearby.length;
+
+    // Calculate radius to farthest report
     const radius = Math.max(
       MIN_CIRCLE_RADIUS_M,
       ...nearby.map((n) => distanceMeters(centerLat, centerLng, n.lat, n.lng))
     );
 
+    // Avoid duplicates (cluster same location once)
     const key = `${centerLat.toFixed(3)},${centerLng.toFixed(3)}`;
     if (seen.has(key)) continue;
     seen.add(key);
+
     result.push({ center: [centerLat, centerLng], radius });
   }
 
   return result;
 }
-
 function getLocationKey(lat: number, lng: number) {
   return `${lat.toFixed(4)},${lng.toFixed(4)}`;
 }
@@ -247,7 +264,7 @@ export default function SmellMap() {
   async function handleMapClick(coords: { lat: number; lng: number }) {
     const usage = getDailyUsage();
     if (usage.count >= DAILY_LIMIT) {
-      window.alert("You have reached the daily limit of smell reports (50). Please try again tomorrow.");
+      window.alert("You have reached the daily limit of smell reports. Please try again tomorrow.");
       return;
     }
 
@@ -324,14 +341,15 @@ export default function SmellMap() {
         <MapClickHandler onClick={handleMapClick} />
 
         {getHotspotCircles(getReportsInWindow(reports, HISTORY_MS)).map(({ center, radius }, i) => (
-          <Circle
+          <AnimatedCircle
+          color="transparent"
+          fillColor="#228b22"
+          fillOpacity={0.35}
+          blur={8}
             key={`hotspot-${i}`}
             center={center}
             radius={radius}
             pathOptions={{
-              color: "transparent",
-              fillColor: "#228b22",
-              fillOpacity: 0.35,
               weight: 0,
               className: "hotspot-mist",
             }}
@@ -340,14 +358,12 @@ export default function SmellMap() {
 
         {userPosition && (
           <>
-            <Circle
+            <AnimatedCircle
               center={userPosition}
-              radius={500} // 500 meters radius
-              pathOptions={{
-                color: "#0066ff",
-                fillColor: "#3388ff",
-                fillOpacity: 0.2,
-              }}
+              radius={200} // 500 meters radius
+              color="#0066ff"
+              fillColor="#3388ff"
+              fillOpacity={0.2}
             />
             <Marker position={userPosition} icon={userIcon}>
               <Popup>You are here</Popup>
