@@ -376,13 +376,13 @@ export default function SmellMap() {
         })}
       </div>
 
-      <MapContainer
-        className="rounded-lg z-0"
-        key={center.join(",")}
-        center={center}
-        zoom={15}
-        style={{ height: "80vh", width: "90vw", margin: "auto" }}
-      >
+      <div className="mx-auto" style={{ height: '70vh', width: '90vw', maxWidth: '1000px' }}>
+        <MapContainer
+          className="border-2 border-solid border-lime-500 rounded-lg h-full w-full z-0"
+          key={center.join(",")}
+          center={center}
+          zoom={15}
+        >
         <TileLayer
           attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -523,6 +523,7 @@ export default function SmellMap() {
           return elements;
         })()}
       </MapContainer>
+      </div>
     </>
   );
 }
