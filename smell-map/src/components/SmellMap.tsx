@@ -22,25 +22,44 @@ filter.removeWords(
   "motherfucker"
 );
 
+export const SMELL_CATEGORIES = [
+  { id: "chemical",  label: "Chemical",  emoji: "🧪", color: "#7c3aed" },
+  { id: "sewage",    label: "Sewage",    emoji: "💩", color: "#92400e" },
+  { id: "rubbish",   label: "Rubbish",   emoji: "🗑️", color: "#6b7280" },
+  { id: "food",      label: "Food",      emoji: "🍳", color: "#d97706" },
+  { id: "animal",    label: "Animal",    emoji: "🐾", color: "#16a34a" },
+  { id: "smoke",     label: "Smoke",     emoji: "🔥", color: "#dc2626" },
+  { id: "other",     label: "Other",     emoji: "❓", color: "#ec4899" },
+] as const;
+
+const ALL_CATEGORY_IDS = SMELL_CATEGORIES.map((c) => c.id);
+
+function getCategoryMeta(categoryId?: string) {
+  return SMELL_CATEGORIES.find((c) => c.id === categoryId) ?? { id: "other", label: "Other", emoji: "❓", color: "#ec4899" };
+}
+
+function getCategoryIcon(categoryId?: string) {
+  const cat = getCategoryMeta(categoryId);
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:32px;height:32px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${cat.color};border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;">
+      <span style="transform:rotate(45deg);font-size:14px;line-height:1;">${cat.emoji}</span>
+    </div>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 32],
+    popupAnchor: [0, -34],
+  });
+}
 
 type SmellReport = {
   id: string;
   lat: number;
   lng: number;
   intensity: number;
+  category?: string;
   description?: string;
   createdAt?: Date;
 };
-
-const defaultIcon = L.icon({
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
 
 function formatDateWithOrdinal(date: Date) {
   const day = date.getDate();
@@ -72,28 +91,24 @@ const userIcon = L.divIcon({
 
 const ACTIVE_MS = 60 * 60 * 1000;       // 1 hour – show as full marker
 const HISTORY_MS = 24 * 60 * 60 * 1000; // 24 hours – show in history / red dot
-const HOTSPOT_LOOKUP_RADIUS_M = 1000; // reports within this form a hotspot cluster
-const HOTSPOT_MIN_COUNT = 5;          // min reports in cluster to show mist
-const MIN_CIRCLE_RADIUS_M = 40;      // minimum circle size so it's visible
+const HOTSPOT_LOOKUP_RADIUS_M = 1000;
+const HOTSPOT_MIN_COUNT = 5;
+const MIN_CIRCLE_RADIUS_M = 40;
 
 const DAILY_LIMIT = 10;
 const STORAGE_KEY = "smell-report-daily-usage";
 
 function getTodayKey() {
   const now = new Date();
-  return now.toISOString().slice(0, 10); // "YYYY-MM-DD"
+  return now.toISOString().slice(0, 10);
 }
 
 function getDailyUsage() {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return { date: getTodayKey(), count: 0 };
-    }
+    if (!raw) return { date: getTodayKey(), count: 0 };
     const parsed = JSON.parse(raw);
-    if (parsed.date !== getTodayKey()) {
-      return { date: getTodayKey(), count: 0 };
-    }
+    if (parsed.date !== getTodayKey()) return { date: getTodayKey(), count: 0 };
     return parsed;
   } catch {
     return { date: getTodayKey(), count: 0 };
@@ -107,13 +122,8 @@ function incrementDailyUsage() {
   return next;
 }
 
-function distanceMeters(
-  lat1: number,
-  lng1: number,
-  lat2: number,
-  lng2: number
-): number {
-  const R = 6371000; // Earth radius in metres
+function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLng = ((lng2 - lng1) * Math.PI) / 180;
   const a =
@@ -126,18 +136,11 @@ function distanceMeters(
   return R * c;
 }
 
-/**
- * Green-mist circles derived from pin positions: each circle's center is the
- * centroid of a cluster (≥5 reports within 1km), and its radius is the distance
- * from that centroid to the farthest pin (so the circle wraps the pins).
- */
 function getHotspotCircles(
   reports: SmellReport[],
-  windowMs: number = ACTIVE_MS // default to active reports only
+  windowMs: number = ACTIVE_MS
 ): { center: [number, number]; radius: number }[] {
   const now = Date.now();
-
-  // Filter only reports within the active window
   const activeReports = reports.filter(
     (r) => r.createdAt && r.createdAt.getTime() >= now - windowMs
   );
@@ -146,34 +149,27 @@ function getHotspotCircles(
   const result: { center: [number, number]; radius: number }[] = [];
 
   for (const r of activeReports) {
-    // Find nearby active reports
     const nearby = activeReports.filter(
       (other) => distanceMeters(r.lat, r.lng, other.lat, other.lng) <= HOTSPOT_LOOKUP_RADIUS_M
     );
-
-    // Must meet minimum count to qualify as hotspot
     if (nearby.length < HOTSPOT_MIN_COUNT) continue;
 
-    // Calculate centroid
     const centerLat = nearby.reduce((s, n) => s + n.lat, 0) / nearby.length;
     const centerLng = nearby.reduce((s, n) => s + n.lng, 0) / nearby.length;
-
-    // Calculate radius to farthest report
     const radius = Math.max(
       MIN_CIRCLE_RADIUS_M,
       ...nearby.map((n) => distanceMeters(centerLat, centerLng, n.lat, n.lng))
     );
 
-    // Avoid duplicates (cluster same location once)
     const key = `${centerLat.toFixed(3)},${centerLng.toFixed(3)}`;
     if (seen.has(key)) continue;
     seen.add(key);
-
     result.push({ center: [centerLat, centerLng], radius });
   }
 
   return result;
 }
+
 function getLocationKey(lat: number, lng: number) {
   return `${lat.toFixed(4)},${lng.toFixed(4)}`;
 }
@@ -201,12 +197,13 @@ export default function SmellMap() {
   const [center, setCenter] = useState<[number, number] | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [userPosition, setUserPosition] = useState<[number, number] | null>(null);
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
+    new Set(ALL_CATEGORY_IDS)
+  );
 
-  // On load, try to center on user's live location
   useEffect(() => {
     if (!("geolocation" in navigator)) {
       setLocationError("Location is not available in this browser.");
-      // Fallback: Melbourne CBD
       setCenter([-37.8136, 144.9631]);
       return;
     }
@@ -215,33 +212,21 @@ export default function SmellMap() {
       (pos) => {
         const nextPos: [number, number] = [pos.coords.latitude, pos.coords.longitude];
         setUserPosition(nextPos);
-        // If we don't have a center yet, use the first position to center the map
         setCenter((current) => current ?? nextPos);
       },
       (err) => {
         console.error("Geolocation error", err);
         setLocationError("Couldn't get your location. Showing default view.");
-        // Fallback: Melbourne CBD
         setCenter([-37.8136, 144.9631]);
       },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 60000,
-      }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     );
 
-    return () => {
-      navigator.geolocation.clearWatch(watchId);
-    };
+    return () => { navigator.geolocation.clearWatch(watchId); };
   }, []);
 
   useEffect(() => {
-    const q = query(
-      collection(db, "smellReports"),
-      orderBy("createdAt", "desc")
-    );
-
+    const q = query(collection(db, "smellReports"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const next: SmellReport[] = snapshot.docs.map((doc) => {
         const data = doc.data() as any;
@@ -250,14 +235,13 @@ export default function SmellMap() {
           lat: data.lat,
           lng: data.lng,
           intensity: data.intensity,
+          category: data.category,
           description: data.description,
           createdAt: data.createdAt?.toDate?.(),
         };
       });
-
       setReports(next);
     });
-
     return () => unsubscribe();
   }, []);
 
@@ -276,6 +260,17 @@ export default function SmellMap() {
       window.alert("Please enter a number from 1 to 5.");
       return;
     }
+
+    const categoryOptions = SMELL_CATEGORIES.map((c, i) => `${i + 1}. ${c.emoji} ${c.label}`).join("\n");
+    const categoryStr = window.prompt(`What type of smell? Enter a number:\n${categoryOptions}`);
+    if (!categoryStr) return;
+
+    const categoryNum = Number(categoryStr);
+    if (Number.isNaN(categoryNum) || categoryNum < 1 || categoryNum > SMELL_CATEGORIES.length) {
+      window.alert(`Please enter a number from 1 to ${SMELL_CATEGORIES.length}.`);
+      return;
+    }
+    const category = SMELL_CATEGORIES[categoryNum - 1].id;
 
     let description: string | null = window.prompt("Describe the smell (required)");
     while (description !== null) {
@@ -296,11 +291,11 @@ export default function SmellMap() {
     if (description === null) return;
 
     try {
-      console.log("DB instance:", db);
       await addDoc(collection(db, "smellReports"), {
         lat: coords.lat,
         lng: coords.lng,
         intensity,
+        category,
         description,
         createdAt: serverTimestamp(),
       });
@@ -310,6 +305,29 @@ export default function SmellMap() {
       window.alert("Sorry, something went wrong saving your smell report.");
     }
   }
+
+  function toggleCategory(id: string) {
+    setSelectedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  function resetCategories() {
+    setSelectedCategories(new Set(ALL_CATEGORY_IDS));
+  }
+
+  const allSelected = selectedCategories.size === ALL_CATEGORY_IDS.length;
+
+  // Filter reports by selected categories; if none selected, show all
+  const visibleReports = selectedCategories.size === 0
+    ? reports
+    : reports.filter((r) => selectedCategories.has(r.category ?? "other"));
 
   if (!center) {
     return (
@@ -327,6 +345,37 @@ export default function SmellMap() {
         </p>
       )}
 
+      {/* Filter chips */}
+      <div className="flex flex-wrap gap-2 px-4 pb-3 justify-center items-center">
+        <button
+          onClick={resetCategories}
+          className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors cursor-pointer ${
+            allSelected
+              ? "bg-foreground text-background border-foreground"
+              : "bg-background text-muted-foreground border-border hover:bg-muted"
+          }`}
+        >
+          All
+        </button>
+        {SMELL_CATEGORIES.map((cat) => {
+          const isSelected = selectedCategories.has(cat.id);
+          return (
+            <button
+              key={cat.id}
+              onClick={() => toggleCategory(cat.id)}
+              className="px-3 py-1.5 rounded-full text-sm font-medium border transition-colors cursor-pointer"
+              style={
+                isSelected
+                  ? { backgroundColor: cat.color, borderColor: cat.color, color: "#fff" }
+                  : { backgroundColor: "transparent", borderColor: "var(--border)", color: "var(--muted-foreground)" }
+              }
+            >
+              {cat.emoji} {cat.label}
+            </button>
+          );
+        })}
+      </div>
+
       <MapContainer
         className="rounded-lg z-0"
         key={center.join(",")}
@@ -341,12 +390,12 @@ export default function SmellMap() {
 
         <MapClickHandler onClick={handleMapClick} />
 
-        {getHotspotCircles(getReportsInWindow(reports, HISTORY_MS)).map(({ center, radius }, i) => (
+        {getHotspotCircles(getReportsInWindow(visibleReports, HISTORY_MS)).map(({ center, radius }, i) => (
           <AnimatedCircle
-          color="transparent"
-          fillColor="#228b22"
-          fillOpacity={0.35}
-          blur={8}
+            color="transparent"
+            fillColor="#228b22"
+            fillOpacity={0.35}
+            blur={8}
             key={`hotspot-${i}`}
             center={center}
             radius={radius}
@@ -361,7 +410,7 @@ export default function SmellMap() {
           <>
             <AnimatedCircle
               center={userPosition}
-              radius={200} // 500 meters radius
+              radius={200}
               color="#0066ff"
               fillColor="#3388ff"
               fillOpacity={0.2}
@@ -373,8 +422,7 @@ export default function SmellMap() {
         )}
 
         {(() => {
-          const inLast24h = getReportsInWindow(reports, HISTORY_MS);
-          const activeReports = getReportsInWindow(reports, ACTIVE_MS);
+          const inLast24h = getReportsInWindow(visibleReports, HISTORY_MS);
           const byLocation = groupReportsByLocation(inLast24h);
 
           const elements: React.ReactNode[] = [];
@@ -385,20 +433,25 @@ export default function SmellMap() {
             const hasActive = groupReports.some((r) =>
               r.createdAt && r.createdAt.getTime() >= Date.now() - ACTIVE_MS
             );
+            const latestCat = getCategoryMeta(latest.category);
 
             const historyList = (
               <ul style={{ margin: "0.5rem 0 0 0", paddingLeft: "1.2rem" }}>
-                {groupReports.map((r) => (
-                  <li key={r.id} style={{ marginBottom: "0.25rem" }}>
-                    <strong>{r.intensity}/5</strong>
-                    {r.description && ` – ${r.description}`}
-                    {r.createdAt && (
-                      <small style={{ display: "block" }}>
-                        {formatDateWithOrdinal(r.createdAt)}
-                      </small>
-                    )}
-                  </li>
-                ))}
+                {groupReports.map((r) => {
+                  const cat = getCategoryMeta(r.category);
+                  return (
+                    <li key={r.id} style={{ marginBottom: "0.25rem" }}>
+                      <strong>{r.intensity}/5</strong>
+                      {" "}<span style={{ fontSize: "0.8em", background: cat.color, color: "#fff", borderRadius: "4px", padding: "1px 5px" }}>{cat.emoji} {cat.label}</span>
+                      {r.description && ` – ${r.description}`}
+                      {r.createdAt && (
+                        <small style={{ display: "block" }}>
+                          {formatDateWithOrdinal(r.createdAt)}
+                        </small>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             );
 
@@ -407,11 +460,15 @@ export default function SmellMap() {
                 <Marker
                   key={`active-${locationKey}`}
                   position={position}
-                  icon={defaultIcon as any}
+                  icon={getCategoryIcon(latest.category) as any}
                 >
                   <Popup>
                     <div>
                       <strong>Smell intensity:</strong> {latest.intensity}/5
+                      <br />
+                      <span style={{ fontSize: "0.85em", background: latestCat.color, color: "#fff", borderRadius: "4px", padding: "1px 6px", display: "inline-block", marginTop: "2px" }}>
+                        {latestCat.emoji} {latestCat.label}
+                      </span>
                       {latest.description && (
                         <>
                           <br />
@@ -432,19 +489,7 @@ export default function SmellMap() {
                           <strong style={{ marginTop: "0.5rem", display: "block" }}>
                             Past reports here (24h):
                           </strong>
-                          <ul style={{ margin: "0.5rem 0 0 0", paddingLeft: "1.2rem" }}>
-                            {groupReports.slice(1).map((r) => (
-                              <li key={r.id} style={{ marginBottom: "0.25rem" }}>
-                                <strong>{r.intensity}/5</strong>
-                                {r.description && ` – ${r.description}`}
-                                {r.createdAt && (
-                                  <small style={{ display: "block" }}>
-                                    {formatDateWithOrdinal(r.createdAt)}
-                                  </small>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
+                          {historyList}
                         </>
                       )}
                     </div>
@@ -458,8 +503,8 @@ export default function SmellMap() {
                   center={position}
                   radius={6}
                   pathOptions={{
-                    color: "#c00",
-                    fillColor: "#e00",
+                    color: latestCat.color,
+                    fillColor: latestCat.color,
                     fillOpacity: 0.9,
                     weight: 2,
                   }}

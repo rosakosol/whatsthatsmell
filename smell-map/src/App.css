@@ -6,7 +6,3 @@
   overflow: hidden;
 }
 
-/* Green hotspot mist: single circle with blurred edge */
-.hotspot-mist {
-  filter: blur(18px);
-}
