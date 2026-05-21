@@ -22,6 +22,33 @@ filter.removeWords(
   "motherfucker"
 );
 
+export const TILE_LAYERS = [
+  {
+    id: "standard",
+    label: "Standard",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: "&copy; OpenStreetMap contributors",
+  },
+  {
+    id: "light",
+    label: "Light",
+    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+  },
+  {
+    id: "dark",
+    label: "Dark",
+    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+  },
+  {
+    id: "satellite",
+    label: "Satellite",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution: "Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics",
+  },
+] as const;
+
 export const SMELL_CATEGORIES = [
   { id: "chemical",  label: "Chemical",  emoji: "🧪", color: "#7c3aed" },
   { id: "sewage",    label: "Sewage",    emoji: "💩", color: "#92400e" },
@@ -200,6 +227,7 @@ export default function SmellMap() {
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
     new Set(ALL_CATEGORY_IDS)
   );
+  const [tileStyleId, setTileStyleId] = useState<string>("standard");
 
   useEffect(() => {
     if (!("geolocation" in navigator)) {
@@ -345,6 +373,25 @@ export default function SmellMap() {
         </p>
       )}
 
+      {/* Map style picker */}
+      <div className="flex gap-2 px-4 pb-2 justify-center items-center">
+        <span className="text-xs text-muted-foreground mr-1">Map style:</span>
+        {TILE_LAYERS.map((tile) => (
+          <button
+            key={tile.id}
+            onClick={() => setTileStyleId(tile.id)}
+            className="px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer"
+            style={
+              tileStyleId === tile.id
+                ? { backgroundColor: "var(--foreground)", borderColor: "var(--foreground)", color: "var(--background)" }
+                : { backgroundColor: "transparent", borderColor: "var(--border)", color: "var(--muted-foreground)" }
+            }
+          >
+            {tile.label}
+          </button>
+        ))}
+      </div>
+
       {/* Filter chips */}
       <div className="flex flex-wrap gap-2 px-4 pb-3 justify-center items-center">
         <button
@@ -383,10 +430,10 @@ export default function SmellMap() {
           center={center}
           zoom={15}
         >
-        <TileLayer
-          attribution="&copy; OpenStreetMap contributors"
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        {(() => {
+          const tile = TILE_LAYERS.find((t) => t.id === tileStyleId) ?? TILE_LAYERS[0];
+          return <TileLayer key={tile.id} attribution={tile.attribution} url={tile.url} />;
+        })()}
 
         <MapClickHandler onClick={handleMapClick} />
 
