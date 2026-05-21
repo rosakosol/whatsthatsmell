@@ -632,13 +632,13 @@ export default function SmellMap() {
               style={{ animation: 'pulse 2s infinite' }}
             />
             <span className="text-sm font-semibold">Live Feed</span>
-            <span className="ml-auto text-xs text-muted-foreground">{reports.length} reports</span>
+            <span className="ml-auto text-xs text-muted-foreground">{getReportsInWindow(reports, HISTORY_MS).length} reports</span>
           </div>
           <div className="overflow-y-auto flex-1">
             {reports.length === 0 && (
               <p className="text-xs text-muted-foreground text-center py-6">No reports yet.</p>
             )}
-            {reports.map((r) => {
+            {getReportsInWindow(reports, HISTORY_MS).map((r) => {
               const cat = getCategoryMeta(r.category);
               const locKey = getLocationKey(r.lat, r.lng);
               const address = addressCache[locKey];
