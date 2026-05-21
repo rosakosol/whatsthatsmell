@@ -224,9 +224,8 @@ export default function SmellMap() {
   const [center, setCenter] = useState<[number, number] | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [userPosition, setUserPosition] = useState<[number, number] | null>(null);
-  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
-    new Set(ALL_CATEGORY_IDS)
-  );
+  // Empty set = "All" mode (show everything). Non-empty = show only those categories.
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [tileStyleId, setTileStyleId] = useState<string>("standard");
 
   useEffect(() => {
@@ -338,7 +337,7 @@ export default function SmellMap() {
     setSelectedCategories((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
-        next.delete(id);
+        next.delete(id); // if last one removed, set becomes empty → back to All mode
       } else {
         next.add(id);
       }
@@ -347,13 +346,13 @@ export default function SmellMap() {
   }
 
   function resetCategories() {
-    setSelectedCategories(new Set(ALL_CATEGORY_IDS));
+    setSelectedCategories(new Set()); // empty = All mode
   }
 
-  const allSelected = selectedCategories.size === ALL_CATEGORY_IDS.length;
+  const allMode = selectedCategories.size === 0;
 
-  // Filter reports by selected categories; if none selected, show all
-  const visibleReports = selectedCategories.size === 0
+  // Empty set = All mode (show everything)
+  const visibleReports = allMode
     ? reports
     : reports.filter((r) => selectedCategories.has(r.category ?? "other"));
 
@@ -397,7 +396,7 @@ export default function SmellMap() {
         <button
           onClick={resetCategories}
           className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors cursor-pointer ${
-            allSelected
+            allMode
               ? "bg-foreground text-background border-foreground"
               : "bg-background text-muted-foreground border-border hover:bg-muted"
           }`}
