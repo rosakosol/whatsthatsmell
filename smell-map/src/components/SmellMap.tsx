@@ -219,6 +219,16 @@ function groupReportsByLocation(reports: SmellReport[]): Map<string, SmellReport
   return map;
 }
 
+function timeAgo(date: Date): string {
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 export default function SmellMap() {
   const [reports, setReports] = useState<SmellReport[]>([]);
   const [center, setCenter] = useState<[number, number] | null>(null);
@@ -422,7 +432,8 @@ export default function SmellMap() {
         })}
       </div>
 
-      <div className="mx-auto" style={{ height: '70vh', width: '90vw', maxWidth: '1000px' }}>
+      <div className="mx-auto flex gap-3" style={{ height: '70vh', width: '90vw', maxWidth: '1300px' }}>
+        <div className="flex-1 min-w-0">
         <MapContainer
           className="border-2 border-solid border-lime-500 rounded-lg h-full w-full z-0"
           key={center.join(",")}
@@ -569,6 +580,49 @@ export default function SmellMap() {
           return elements;
         })()}
       </MapContainer>
+        </div>
+
+        {/* Live feed panel */}
+        <div
+          className="flex flex-col rounded-lg border border-border bg-card text-card-foreground overflow-hidden"
+          style={{ width: '280px', flexShrink: 0 }}
+        >
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
+            <span
+              className="inline-block w-2 h-2 rounded-full bg-green-500"
+              style={{ animation: 'pulse 2s infinite' }}
+            />
+            <span className="text-sm font-semibold">Live Feed</span>
+            <span className="ml-auto text-xs text-muted-foreground">{reports.length} reports</span>
+          </div>
+          <div className="overflow-y-auto flex-1">
+            {reports.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-6">No reports yet.</p>
+            )}
+            {reports.map((r) => {
+              const cat = getCategoryMeta(r.category);
+              return (
+                <div key={r.id} className="px-3 py-2 border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span
+                      className="text-xs font-medium rounded px-1.5 py-0.5"
+                      style={{ backgroundColor: cat.color, color: '#fff' }}
+                    >
+                      {cat.emoji} {cat.label}
+                    </span>
+                    <span className="text-xs font-semibold ml-auto">{r.intensity}/5</span>
+                  </div>
+                  {r.description && (
+                    <p className="text-xs text-foreground leading-snug mb-0.5 line-clamp-2">{r.description}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {r.createdAt ? timeAgo(r.createdAt) : "—"}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </>
   );
