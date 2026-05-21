@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Circle, CircleMarker } from "react-leaflet";
 import L from "leaflet";
 import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "firebase/firestore";
@@ -219,6 +219,25 @@ function groupReportsByLocation(reports: SmellReport[]): Map<string, SmellReport
   return map;
 }
 
+async function reverseGeocode(lat: number, lng: number): Promise<string> {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+      { headers: { "Accept-Language": "en" } }
+    );
+    const data = await res.json();
+    const a = data.address ?? {};
+    const parts = [
+      a.road ?? a.pedestrian ?? a.footway ?? a.path,
+      a.suburb ?? a.neighbourhood ?? a.village ?? a.town ?? a.city,
+      a.state,
+    ].filter(Boolean);
+    return parts.join(", ") || "Unknown location";
+  } catch {
+    return "Unknown location";
+  }
+}
+
 function timeAgo(date: Date): string {
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
   if (seconds < 60) return "just now";
@@ -237,6 +256,9 @@ export default function SmellMap() {
   // Empty set = "All" mode (show everything). Non-empty = show only those categories.
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [tileStyleId, setTileStyleId] = useState<string>("standard");
+  const [addressCache, setAddressCache] = useState<Record<string, string>>({});
+  const geocodedKeys = useRef<Set<string>>(new Set());
+  const mapRef = useRef<L.Map | null>(null);
 
   useEffect(() => {
     if (!("geolocation" in navigator)) {
@@ -281,6 +303,22 @@ export default function SmellMap() {
     });
     return () => unsubscribe();
   }, []);
+
+  // Reverse-geocode new reports as they arrive; rate-limited to 1 req/s for Nominatim
+  useEffect(() => {
+    const toFetch = reports.filter((r) => {
+      const key = getLocationKey(r.lat, r.lng);
+      return !geocodedKeys.current.has(key);
+    });
+    toFetch.forEach((r, i) => {
+      const key = getLocationKey(r.lat, r.lng);
+      geocodedKeys.current.add(key);
+      setTimeout(async () => {
+        const address = await reverseGeocode(r.lat, r.lng);
+        setAddressCache((prev) => ({ ...prev, [key]: address }));
+      }, i * 1100);
+    });
+  }, [reports]);
 
   async function handleMapClick(coords: { lat: number; lng: number }) {
     const usage = getDailyUsage();
@@ -435,6 +473,7 @@ export default function SmellMap() {
       <div className="mx-auto flex gap-3" style={{ height: '70vh', width: '90vw', maxWidth: '1300px' }}>
         <div className="flex-1 min-w-0">
         <MapContainer
+          ref={mapRef}
           className="border-2 border-solid border-lime-500 rounded-lg h-full w-full z-0"
           key={center.join(",")}
           center={center}
@@ -601,8 +640,14 @@ export default function SmellMap() {
             )}
             {reports.map((r) => {
               const cat = getCategoryMeta(r.category);
+              const locKey = getLocationKey(r.lat, r.lng);
+              const address = addressCache[locKey];
               return (
-                <div key={r.id} className="px-3 py-2 border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
+                <div
+                  key={r.id}
+                  className="px-3 py-2 border-b border-border last:border-0 hover:bg-muted/50 transition-colors cursor-pointer"
+                  onClick={() => mapRef.current?.flyTo([r.lat, r.lng], 17)}
+                >
                   <div className="flex items-center gap-1.5 mb-0.5">
                     <span
                       className="text-xs font-medium rounded px-1.5 py-0.5"
@@ -615,6 +660,9 @@ export default function SmellMap() {
                   {r.description && (
                     <p className="text-xs text-foreground leading-snug mb-0.5 line-clamp-2">{r.description}</p>
                   )}
+                  <p className="text-xs text-muted-foreground leading-snug mb-0.5">
+                    {address ?? <span className="opacity-50">Locating…</span>}
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     {r.createdAt ? timeAgo(r.createdAt) : "—"}
                   </p>
